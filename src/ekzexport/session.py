@@ -17,6 +17,7 @@ class Session:
     """Represents a session with the EKZ API."""
     def __init__(self, username: str, password: str, login_immediately=False):
         self._session = requests.Session()
+        self._session.headers.update({'User-Agent': 'ekzexport'})
         self._username = username
         self._password = password
         self._login_immediately = login_immediately
