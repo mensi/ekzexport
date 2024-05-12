@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Iterable
 
 from .session import Session
 from .apitypes import IDProperty
-from .timeutil import parse_zrh_day
+from .timeutil import parse_zrh_day, format_api_date
 
 
 class DayRange:
@@ -211,14 +211,22 @@ class DataSelection:
     def date_to(self) -> str:
         if self._date_to:
             return self._date_to
-        return self._mapped_properties[self.property_key]['bis'] or datetime.date.today().strftime('%Y-%m-%d')
+
+        api_data_to = self._mapped_properties.get(self.property_key, {}).get('bis')
+        if not api_data_to:
+            return format_api_date(datetime.date.today())
+
+        if parse_zrh_day(api_data_to) > datetime.date.today() - datetime.timedelta(days=3):
+            # The API-provided timeranges when getting properties seems to lag behind the actual data,
+            # so if it's very recent, we'll just round up to today.
+            return format_api_date(datetime.date.today())
+        return api_data_to
 
     @cached_property
     def date_from(self) -> str:
         if self._date_from:
             return self._date_from
-        return (datetime.datetime.strptime(self.date_to, '%Y-%m-%d').date() -
-                datetime.timedelta(days=7)).strftime('%Y-%m-%d')
+        return format_api_date(parse_zrh_day(self.date_to) - datetime.timedelta(days=7))
 
     @cached_property
     def explicit_daterange(self) -> bool:
@@ -234,16 +242,28 @@ class DataSelection:
 
     @cached_property
     def available_ranges(self) -> DayRangeSet:
+        """The ranges the API claims to be available.
+
+        These do not have to be continuous, there can for example be gaps in the 15min data depending
+        on when it was activated. It also seems possible for newer data to already exist."""
         return DayRangeSet([DayRange(parse_zrh_day(x['ab']), parse_zrh_day(x['bis'])) for
                             x in self._properties if x['property'] == self.property_key])
 
     @cached_property
     def requested_ranges(self) -> DayRangeSet:
+        """The ranges the user requested or all available ranges if nothing has been specified."""
         if self.explicit_daterange:
             return DayRangeSet([DayRange(parse_zrh_day(self.date_from), parse_zrh_day(self.date_to))])
-        return self.available_ranges
+
+        result = self.available_ranges
+        if result.ranges:
+            result = DayRangeSet(result.ranges +
+                                 # Make sure the corrections in date_to are also applied here.
+                                 [DayRange(result.end, parse_zrh_day(self.date_to))])
+        return result
 
     def requested_weeks(self) -> Iterable[DayRange]:
+        """Convenience wrapper to iterate over the weeks in requested_ranges."""
         if (len(self.requested_ranges.ranges) == 1 and
                 (self.requested_ranges.ranges[0].end - self.requested_ranges.ranges[0].start).days <= 7):
             return [self.requested_ranges.ranges[0]]  # Requested a week or less, so just return that.
