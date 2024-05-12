@@ -86,3 +86,41 @@ options, for example:
 ```console
 $ ekzexport installation 456 data export csv --help
 ```
+
+## Running Exports Periodically
+
+If you're using a Linux distribution using systemd, you can create a service
+and trigger to run the export periodically. To do so, create
+`/etc/systemd/system/ekzexport.service` with something like:
+
+```ini
+[Unit]
+Description=Pull EKZ data
+
+[Service]
+Type=oneshot
+ExecStart=/path/to/ekzexport/venv/bin/ekzexport installation 456 data export csv -f data.csv
+WorkingDirectory=/path/to/ekzexport
+```
+
+This example assumes you created a Python virtualenv to install ekzexport
+in (which keeps the dependencies local in the venv). You can also
+set up an `OnFailure` hook to send emails in case the export fails.
+
+A corresponding timer can look something like this in `/etc/systemd/system/ekzexport.timer`:
+
+```ini
+[Unit]
+Description=Run ekzexport once a day
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Please keep the randomized delay to avoid myEKZ getting a flood of requests
+at exactly 04:00 every night. Remember to enable and start the timer.
