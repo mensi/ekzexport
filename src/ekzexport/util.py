@@ -56,6 +56,18 @@ class DayRangeSet:
     def __init__(self, ranges: Iterable[DayRange]):
         self.ranges = normalize_ranges(sorted(ranges, key=lambda r: r.start))
 
+    @property
+    def empty(self):
+        return not self.ranges
+
+    @property
+    def start(self):
+        return self.ranges[0].start if not self.empty else None
+
+    @property
+    def end(self):
+        return self.ranges[-1].end if not self.empty else None
+
     def get_days(self):
         """Iterate over every day in the included ranges in increasing order."""
         cur = datetime.date(1900, 1, 1)

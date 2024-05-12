@@ -69,6 +69,10 @@ def cli(session: Session, installation: Installation, data: DataSelection,
         requested_range = requested_range.intersect(DayRangeSet([
             DayRange(latest_time.date(), datetime.date.today())]))
 
+    if requested_range.empty:
+        click.echo(f'Requested data until {format_api_date(data.requested_ranges.end)} leaves nothing to get', err=True)
+        return
+
     for week in itertools.islice(requested_range.get_covering_weeks(), data.limit):
         d = session.get_consumption_data(installation.id, data.data_type,
                                          format_api_date(week.start), format_api_date(week.end))
