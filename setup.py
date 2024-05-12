@@ -12,8 +12,8 @@ setup(
     author_email='mensi@mensi.ch',
     url='https://github.com/mensi/ekzexport',
     license='Apache-2.0',
-    version='0.1.0',
-    packages=['ekzexport'],
+    version='0.1.1',
+    packages=['ekzexport', 'ekzexport.exporters'],
     package_data={'': ['LICENSE']},
     package_dir={'': 'src'},
     install_requires=[
