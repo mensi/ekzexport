@@ -47,7 +47,7 @@ def cli(ctx: click.Context, user: str, password: str):
             click.echo('  ' + os.path.join(location, 'ekzexport.json'), err=True)
         raise click.UsageError('Missing username or password')
 
-    ctx.obj = ctx.with_resource(Session(user, password))
+    ctx.obj = Session(user, password)
 
 
 @cli.command()
