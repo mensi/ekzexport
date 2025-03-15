@@ -43,6 +43,11 @@ class Session:
         # Find the login form and get the action URL, so we can submit credentials.
         soup = BeautifulSoup(r.text, 'html.parser')
         loginform = soup.select('form[id=kc-form-login]')
+        if not loginform:
+            if 'Es tut uns leid' in r.text:
+                raise Exception('myEKZ appears to be offline for maintenance')
+            else:
+                raise Exception('Login form not found on page')
         authurl = loginform[0]['action']
 
         r = self._session.post(authurl, data={'username': self._username, 'password': self._password})
