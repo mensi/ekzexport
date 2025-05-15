@@ -55,14 +55,15 @@ class Session:
         # Find the 2FA form, if available and get the action URL.
         soup = BeautifulSoup(r.text, 'html.parser')
         twofaform = soup.select('form[id=kc-sms-code-login-form]')
-        if not twofaform and 'Es tut uns leid' in r.text:
-            raise Exception('myEKZ appears to be offline for maintenance')
+        if not twofaform:
+            if 'Es tut uns leid' in r.text:
+                raise Exception('myEKZ appears to be offline for maintenance')
         
-        authurl = twofaform[0]['action']
-        code = input('Enter 2FA code (wait for SMS): ')
-        
-        r = self._session.post(authurl, data={'code': code})
-        r.raise_for_status()
+            authurl = twofaform[0]['action']
+            code = input('Enter 2FA code (wait for SMS): ')
+            
+            r = self._session.post(authurl, data={'code': code})
+            r.raise_for_status()
         
         self._logged_in = True
 
