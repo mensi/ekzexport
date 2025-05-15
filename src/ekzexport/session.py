@@ -58,7 +58,7 @@ class Session:
         if not twofaform:
             if 'Es tut uns leid' in r.text:
                 raise Exception('myEKZ appears to be offline for maintenance')
-        
+        else:
             authurl = twofaform[0]['action']
             code = input('Enter 2FA code (wait for SMS): ')
             
