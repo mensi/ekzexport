@@ -44,7 +44,7 @@ class Session:
         soup = BeautifulSoup(r.text, 'html.parser')
         loginform = soup.select('form[id=kc-form-login]')
         if not loginform:
-            if 'Es tut uns leid' in r.text:
+            if 'Es tut uns leid' in r.text or 'Systemunterbruch' in r.text:
                 raise Exception('myEKZ appears to be offline for maintenance')
             else:
                 raise Exception('Login form not found on page')
