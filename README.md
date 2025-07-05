@@ -27,6 +27,11 @@ To authenticate, you can either put your credentials into a JSON file
 Or use the `--user` and `--password` options. The following examples use a JSON
 file.
 
+> [!IMPORTANT]
+> myEKZ supports two-factor authentication. If you have enabled SMS as a second factor,
+> myEKZ will send you a code each time you run ekzexport. While you can enter it each time,
+> it is more convenient to disable SMS authentication in the account settings.
+
 First, list your contracts to find the installation ID of interest:
 
 ```console

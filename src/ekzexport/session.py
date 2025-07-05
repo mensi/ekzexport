@@ -52,18 +52,45 @@ class Session:
 
         r = self._session.post(authurl, data={'username': self._username, 'password': self._password})
         r.raise_for_status()
-        # Find the 2FA form, if available and get the action URL.
-        soup = BeautifulSoup(r.text, 'html.parser')
-        twofaform = soup.select('form[id=kc-sms-code-login-form]')
-        if not twofaform:
-            if 'Es tut uns leid' in r.text:
-                raise Exception('myEKZ appears to be offline for maintenance')
-        else:
-            authurl = twofaform[0]['action']
-            code = input('Enter 2FA code (wait for SMS): ')
-            
-            r = self._session.post(authurl, data={'code': code})
+
+        # There are a few options what can happen at this point:
+        # - If 2FA is enabled, we will have been redirected to a page which will ask for the second factor
+        # - If 2FA is disabled, every once in a while myEKZ will ask for our mobile number on:
+        #   https://login.ekz.ch/auth/realms/myEKZ/login-actions/required-action?
+        #     execution=ensu_mobile_number_config&client_id=cos-myekz-webapp&tab_id=<alnum>
+        #   To skip, mobile_number=&cancel=Sp%C3%A4ter+einrichten is POSTed to
+        #   https://login.ekz.ch/auth/realms/myEKZ/login-actions/required-action?
+        #     session_code=<alnum>&execution=ensu_mobile_number_config&client_id=cos-myekz-webapp&tab_id=<alnum>
+
+        if 'ensu_mobile_number_config' in r.url:
+            # Just get the form action and submit the cancellation to skip...
+            soup = BeautifulSoup(r.text, 'html.parser')
+            mobileform = soup.select('form')
+            if not mobileform:
+                raise Exception('Didn\'t find mobile phone number entry on: ' + r.url)
+            mobileurl = mobileform[0]['action']
+            if 'ensu_mobile_number_config' not in mobileurl:
+                raise Exception('Unexpected mobile phone number entry URL: ' + mobileurl)
+            r = self._session.post(mobileurl, data={'mobile_number': '', 'cancel': 'Später einrichten'})
             r.raise_for_status()
+
+        elif 'auth/realms/myEKZ/login-actions/authenticate' in r.url:
+            # Find the 2FA form, if available and get the action URL.
+            soup = BeautifulSoup(r.text, 'html.parser')
+            twofaform = soup.select('form[id=kc-sms-code-login-form]')
+            if not twofaform:
+                if 'Es tut uns leid' in r.text:
+                    raise Exception('myEKZ appears to be offline for maintenance')
+            else:
+                authurl = twofaform[0]['action']
+                code = input('Enter 2FA code (wait for SMS): ')
+
+                r = self._session.post(authurl, data={'code': code})
+                r.raise_for_status()
+
+        # Finally, if we're successfully logged in, we should be back at the original URL we requested
+        if r.url != 'https://my.ekz.ch/verbrauch/':
+            raise Exception('Unable to login. Ended up at ' + r.url + ' instead of https://my.ekz.ch/verbrauch/')
         
         self._logged_in = True
 
