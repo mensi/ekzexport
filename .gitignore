@@ -1,7 +1,14 @@
-.idea/
-.vscode/
-.venv*/
-venv*/
+# Python-generated files
 __pycache__/
+*.py[oc]
+build/
 dist/
-ekzexport.egg-info/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv*
+
+# IDE files
+.idea
