@@ -1,6 +1,7 @@
 from functools import cached_property
 
 import requests
+import pyotp
 from bs4 import BeautifulSoup
 
 from .apitypes import *
@@ -15,11 +16,12 @@ JSON_HEADERS = {
 
 class Session:
     """Represents a session with the EKZ API."""
-    def __init__(self, username: str, password: str, login_immediately=False):
+    def __init__(self, username: str, password: str, token='', login_immediately=False):
         self._session = requests.Session()
         self._session.headers.update({'User-Agent': 'ekzexport'})
         self._username = username
         self._password = password
+        self._token = token.strip().replace(' ', '')
         self._login_immediately = login_immediately
         self._logged_in = False
 
@@ -75,18 +77,26 @@ class Session:
             r.raise_for_status()
 
         elif 'auth/realms/myEKZ/login-actions/authenticate' in r.url:
-            # Find the 2FA form, if available and get the action URL.
+            # If we did not get redirected away now, we're being asked for
+            # a second factor, either SMS code or OTP.
             soup = BeautifulSoup(r.text, 'html.parser')
-            twofaform = soup.select('form[id=kc-sms-code-login-form]')
-            if not twofaform:
-                if 'Es tut uns leid' in r.text:
-                    raise Exception('myEKZ appears to be offline for maintenance')
-            else:
-                authurl = twofaform[0]['action']
+            smsform = soup.select('form[id=kc-sms-code-login-form]')
+            otpform = soup.select('form[id=kc-otp-login-form]')
+            if smsform:
+                authurl = smsform[0]['action']
                 code = input('Enter 2FA code (wait for SMS): ')
-
                 r = self._session.post(authurl, data={'code': code})
                 r.raise_for_status()
+            elif otpform:
+                if not self._token:
+                    raise Exception('OTP is enabled but no token was provided')
+                authurl = otpform[0]['action']
+                r = self._session.post(authurl, data={'otp': pyotp.TOTP(self._token).now()})
+                r.raise_for_status()
+            elif 'Es tut uns leid' in r.text or 'Systemunterbruch' in r.text:
+                raise Exception('myEKZ appears to be offline for maintenance')
+            else:
+                raise Exception('myEKZ auth expects something we can\'t handle.')
 
         # Finally, if we're successfully logged in, we should be back at the original URL we requested
         if r.url != 'https://my.ekz.ch/verbrauch/':

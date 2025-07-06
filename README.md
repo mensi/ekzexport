@@ -24,13 +24,26 @@ To authenticate, you can either put your credentials into a JSON file
 }
 ```
 
-Or use the `--user` and `--password` options. The following examples use a JSON
-file.
+If you're using a TOTP token via an authenticator app, you can create a dedicated token to use.
+Click on the "can't scan QR code" link to get the code to manually enter and put it in the
+JSON file so it looks similar to this:
+
+```json
+{
+  "user": "myusername",
+  "password": "mypassword",
+  "otp": "AAAA BBBB CCCC DDDD EEEE FFFF GGGG HHHH"
+}
+```
+
+Instead of the JSON config file, you can also use the `--user` and `--password` (and `--otp`) 
+CLI options directly. The following examples use a JSON file.
 
 > [!IMPORTANT]
-> myEKZ supports two-factor authentication. If you have enabled SMS as a second factor,
+> If you have enabled SMS as a second factor authentication,
 > myEKZ will send you a code each time you run ekzexport. While you can enter it each time,
-> it is more convenient to disable SMS authentication in the account settings.
+> it is more convenient to disable SMS authentication in the account settings or use a TOTP
+> authenticator app.
 
 First, list your contracts to find the installation ID of interest:
 

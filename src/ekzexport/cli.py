@@ -20,8 +20,9 @@ from .exporters import ALL_EXPORT_COMMANDS
 @click.group()
 @click.option('--user', default=None, help='Username')
 @click.option('--password', default=None, help='Password')
+@click.option('--otp', default='', help='OTP Secret')
 @click.pass_context
-def cli(ctx: click.Context, user: str, password: str):
+def cli(ctx: click.Context, user: str, password: str, otp: str):
     """EKZ API client.
 
     The client only supports user/password login; 3rd party login providers are not supported.
@@ -36,6 +37,7 @@ def cli(ctx: click.Context, user: str, password: str):
                     config = json.load(f)
                     user = config['user']
                     password = config['password']
+                    otp = config.get('otp', '')
                     break
             except Exception as e:
                 pass
@@ -47,7 +49,7 @@ def cli(ctx: click.Context, user: str, password: str):
             click.echo('  ' + os.path.join(location, 'ekzexport.json'), err=True)
         raise click.UsageError('Missing username or password')
 
-    ctx.obj = ctx.with_resource(Session(user, password))
+    ctx.obj = ctx.with_resource(Session(user, password, otp))
 
 
 @cli.command()
