@@ -1,6 +1,9 @@
 # ekzexport
 
-Exporter for EKZ data provided on the http://my.ekz.ch customer portal.
+This is an exporter for EKZ data provided on the http://my.ekz.ch customer portal
+written in Python. It uses your credentials to login and then calls the EKZ API
+the website uses to directly export the data. Data can be synced either to a CSV 
+file or InfluxDB.
 
 ## Installing
 
