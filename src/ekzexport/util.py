@@ -270,6 +270,15 @@ class DataSelection:
         return itertools.islice(self.requested_ranges.get_covering_weeks(), self.limit)
 
 
+class Leg:
+    """CLI context for tracking the selected LEG."""
+    id: str
+
+    def __init__(self, leg_id: str):
+        self.id = leg_id
+
+
 pass_session = click.make_pass_decorator(Session)
 pass_installation = click.make_pass_decorator(Installation)
 pass_data = click.make_pass_decorator(DataSelection)
+pass_leg = click.make_pass_decorator(Leg)

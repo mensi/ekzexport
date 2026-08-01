@@ -39,7 +39,11 @@ class Session:
     def _ensure_logged_in(self):
         if self._logged_in:
             return
-        r = self._session.get('https://my.ekz.ch/verbrauch/', headers=HTML_HEADERS)
+        # We need to use a page that works for everyone and is reasonably fast to load.
+        # /startseite appears to be really slow for some accounts, so that is not a good choice.
+        # /verbrauch used to be what we used but for pure LEG managers without a metering point that returns 403
+        # so /nutzerdaten it is, even if we don't actually care about the user data.
+        r = self._session.get('https://my.ekz.ch/nutzerdaten/', headers=HTML_HEADERS)
         r.raise_for_status()
 
         # Find the login form and get the action URL, so we can submit credentials.
@@ -99,37 +103,40 @@ class Session:
                 raise Exception('myEKZ auth expects something we can\'t handle.')
 
         # Finally, if we're successfully logged in, we should be back at the original URL we requested
-        if r.url != 'https://my.ekz.ch/verbrauch/':
-            raise Exception('Unable to login. Ended up at ' + r.url + ' instead of https://my.ekz.ch/verbrauch/')
+        if r.url != 'https://my.ekz.ch/nutzerdaten/':
+            raise Exception('Unable to login. Ended up at ' + r.url + ' instead of https://my.ekz.ch/nutzerdaten/')
         
         self._logged_in = True
 
-    def get_csrf_token(self):
+    def _get_portal_services_json(self, suffix: str):
         self._ensure_logged_in()
-        r = self._session.get('https://my.ekz.ch/api/portal-services/csrf/v1/token', headers=JSON_HEADERS)
+        r = self._session.get(f'https://my.ekz.ch/api/portal-services/{suffix}', headers=JSON_HEADERS)
         r.raise_for_status()
-        return r.json()['token']
+        return r.json()
+
+    def get_csrf_token(self):
+        return self._get_portal_services_json('csrf/v1/token')['token']
 
     @cached_property
     def installation_selection_data(self) -> InstallationSelectionData:
-        self._ensure_logged_in()
-        r = self._session.get('https://my.ekz.ch/api/portal-services/consumption-view/v1/installation-selection-data'
-                              '?installationVariant=CONSUMPTION', headers=JSON_HEADERS)
-        r.raise_for_status()
-        return r.json()
+        return self._get_portal_services_json(
+            'consumption-view/v1/installation-selection-data'
+            '?installationVariant=CONSUMPTION')
 
     def get_installation_data(self, installation_id: str) -> InstallationData:
-        self._ensure_logged_in()
-        r = self._session.get('https://my.ekz.ch/api/portal-services/consumption-view/v1/installation-data'
-                              '?installationId=' + installation_id, headers=JSON_HEADERS)
-        r.raise_for_status()
-        return r.json()
+        return self._get_portal_services_json(
+            f'consumption-view/v1/installation-data'
+            f'?installationId={installation_id}')
 
     def get_consumption_data(self, installation_id: str, data_type: str,
                              date_from: str, date_to: str) -> ConsumptionData:
-        self._ensure_logged_in()
-        r = self._session.get(f'https://my.ekz.ch/api/portal-services/consumption-view/v1/consumption-data'
-                              f'?installationId={installation_id}&from={date_from}&to={date_to}&type={data_type}',
-                              headers=JSON_HEADERS)
-        r.raise_for_status()
-        return r.json()
+        return self._get_portal_services_json(
+            f'consumption-view/v1/consumption-data'
+            f'?installationId={installation_id}&from={date_from}&to={date_to}&type={data_type}'
+        )
+
+    def get_legs(self) -> List[LegHeader]:
+        return self._get_portal_services_json('leg-manager-dashboard/v1/leg-headers')['legHeaders']
+
+    def get_leg_detail(self, leg_id: str) -> LegDetails:
+        return self._get_portal_services_json(f'leg-manager-dashboard/v1/leg-details/{leg_id}')['legDetails']

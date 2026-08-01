@@ -145,3 +145,20 @@ WantedBy=timers.target
 
 Please keep the randomized delay to avoid myEKZ getting a flood of requests
 at exactly 04:00 every night. Remember to enable and start the timer.
+
+## LEG Data
+
+If you are a manager of an LEG, you can also get data about the LEGs you
+manage. For example, the list the LEGs your account is managing, run:
+
+```console
+$ ekzexport legs
+                                   Legs                                    
+                                   ╷                                       
+  LEG ID                           │ Leg Name                              
+╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┿━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸
+  0123456789ABCDEF123456789ABCDEF1 │ My awesome LEG number 1              
+  0123456789ABCDEF123456789ABCDEF2 │ My awesome LEG number 2                
+```
+
+See help output for more LEG commands.

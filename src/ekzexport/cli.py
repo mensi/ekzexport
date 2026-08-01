@@ -6,14 +6,17 @@ import traceback
 
 import click
 
+from typing import Dict
+
 from platformdirs import user_config_dir, site_config_dir
 from rich.console import Console
 from rich.table import Table
 from rich import box
 
+from .apitypes import GpartData, LegMeteringPointStatus
 from .session import Session
 from .timeutil import format_api_date
-from .util import Installation, pass_installation, pass_session, DataSelection, pass_data
+from .util import Installation, pass_installation, pass_session, DataSelection, pass_data, Leg, pass_leg
 from .exporters import ALL_EXPORT_COMMANDS
 
 
@@ -157,6 +160,81 @@ def export_group():
 
 for cmd in ALL_EXPORT_COMMANDS:
     export_group.add_command(cmd)
+
+
+@cli.command('legs')
+@pass_session
+def show_legs(session: Session):
+    """Shows a list of LEGs managed by this account."""
+    legs = Table(title='Legs', box=box.MINIMAL_HEAVY_HEAD)
+    legs.add_column('LEG ID')
+    legs.add_column('Leg Name')
+
+    for leg in session.get_legs():
+        legs.add_row(leg['legId'], leg['description'])
+
+    console = Console()
+    console.print(legs)
+
+
+@cli.group('leg')
+@click.argument('leg_id')
+@click.pass_context
+def leg_group(ctx: click.Context, leg_id: str):
+    """LEG-specific actions."""
+    ctx.obj = Leg(leg_id)
+
+
+@leg_group.command('show')
+@pass_leg
+@pass_session
+def show_leg(session: Session, leg: Leg):
+    """Show details about a specific LEG."""
+    leg = session.get_leg_detail(leg.id)
+
+    stats = Table(title=f'LEG {leg['basisInfo']['description']} Stats', box=box.MINIMAL_HEAVY_HEAD)
+    stats.add_column('Metric')
+    stats.add_column('Value')
+    stats.add_row('Participants', str(leg['kpi']['numberOfParticipants']))
+    stats.add_row('Installed PV Power', str(leg['kpi']['sumModulePower']))
+    stats.add_row('Connection Power', str(leg['kpi']['sumConnectionPower']))
+    stats.add_row('Qualified for Registration', str(leg['kpi']['qualified']))
+    stats.add_row('Grid fee reduction %', str(leg['kpi']['reductionRateOfGridFees']))
+
+    # Let's create some helper mappings to quickly get associated info
+    status_by_point: Dict[str, LegMeteringPointStatus] = {}
+    for point_status in leg['meteringPointStatusList']:
+        status_by_point[point_status['meteringPointId']] = point_status
+    data_by_gpart: Dict[str, GpartData] = {}
+    for data in leg['gpartCommonData']:
+        data_by_gpart[data['gpart']] = data
+
+    mpoints = Table(title='Participating Metering Points', box=box.MINIMAL_HEAVY_HEAD)
+    mpoints.add_column('ID')
+    mpoints.add_column('Role')
+    mpoints.add_column('Power')
+    mpoints.add_column('Location')
+    mpoints.add_column('Name')
+    mpoints.add_column('Contact Info')
+
+    for point in leg['meteringPointList']:
+        role = 'Producer' if point['specifications']['producer'] else 'Consumer'
+        power = (str(point['specifications']['modulePower']) if point['specifications']['producer'] else
+                 str(point['specifications']['connectionPower']))
+        location = f'{point['ort']['locationStreet']} {point['ort']['locationHousenumber']}'
+        name = 'N/A'
+        if point['businessPartnerId'] in data_by_gpart:
+            name = data_by_gpart[point['businessPartnerId']]['name']['namePerson']['firstNamePerson1'] or 'N/A'
+            name += ' '
+            name += data_by_gpart[point['businessPartnerId']]['name']['namePerson']['lastNamePerson1'] or 'N/A'
+        contact = 'N/A'
+        if point['businessPartnerId'] in data_by_gpart:
+            contact = data_by_gpart[point['businessPartnerId']]['communicationData']['email'] or 'N/A'
+        mpoints.add_row(point['meteringPointId'], role, power, location, name, contact)
+
+    console = Console()
+    console.print(stats)
+    console.print(mpoints)
 
 
 def main():
