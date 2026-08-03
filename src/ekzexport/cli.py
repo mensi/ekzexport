@@ -163,15 +163,25 @@ for cmd in ALL_EXPORT_COMMANDS:
 
 
 @cli.command('legs')
+@click.option('--trafo', is_flag=True, help='Try to resolve the Trafo(s) for each LEG.')
 @pass_session
-def show_legs(session: Session):
+def show_legs(session: Session, trafo: bool):
     """Shows a list of LEGs managed by this account."""
     legs = Table(title='Legs', box=box.MINIMAL_HEAVY_HEAD)
     legs.add_column('LEG ID')
     legs.add_column('Leg Name')
+    if trafo:
+        legs.add_column('Trafo')
 
     for leg in session.get_legs():
-        legs.add_row(leg['legId'], leg['description'])
+        if trafo:
+            trafos = set()
+            details = session.get_leg_detail(leg['legId'])
+            for detail in details['meteringPointList']:
+                trafos.add(detail['specifications']['trafostation'])
+            legs.add_row(leg['legId'], leg['description'], ', '.join(trafos))
+        else:
+            legs.add_row(leg['legId'], leg['description'])
 
     console = Console()
     console.print(legs)
