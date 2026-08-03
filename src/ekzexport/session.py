@@ -1,7 +1,9 @@
+from datetime import datetime, timedelta
 from functools import cached_property
 
 import requests
 import pyotp
+
 from bs4 import BeautifulSoup
 
 from .apitypes import *
@@ -24,6 +26,8 @@ class Session:
         self._token = token.strip().replace(' ', '')
         self._login_immediately = login_immediately
         self._logged_in = False
+        # Start with a last successful login far in the past, so any invalidation triggers.
+        self._last_successful_login = datetime.now() - timedelta(days=1000)
 
     def __enter__(self):
         if self._login_immediately:
@@ -39,6 +43,12 @@ class Session:
     def _ensure_logged_in(self):
         if self._logged_in:
             return
+        self._perform_login()
+
+    def _perform_login(self):
+        # Reset the login status to ensure we're not marked as logged in if we bail out early in this function
+        self._logged_in = False
+
         # We need to use a page that works for everyone and is reasonably fast to load.
         # /startseite appears to be really slow for some accounts, so that is not a good choice.
         # /verbrauch used to be what we used but for pure LEG managers without a metering point that returns 403
@@ -107,10 +117,29 @@ class Session:
             raise Exception('Unable to login. Ended up at ' + r.url + ' instead of https://my.ekz.ch/nutzerdaten/')
         
         self._logged_in = True
+        self._last_successful_login = datetime.now()
+
+    def get(self, *args, **kwargs) -> requests.Response:
+        """Call self._session.get while handling redirects to the login flow.
+
+        Using this function makes the request more robust regarding session timeouts, as it
+        transparently logs in again when encountering a redirect to the login form or an error."""
+        response = self._session.get(*args, **kwargs)
+        if response.status_code == 302 and 'login' in response.headers.get('Location', ''):
+            self._perform_login()
+            return self._session.get(*args, **kwargs)
+        elif response.status_code == 500:
+            # It looks like API methods just return a 500 with an invalid login state in the session,
+            # so make sure we're logged in. We however do not want to blindly log in and retry if we do
+            # have a valid, logged-in session, as there could also be genuine 500 errors, and we don't want
+            # to hammer the API in that case.
+            if self._last_successful_login < datetime.now() - timedelta(minutes=10):
+                self._perform_login()
+                return self._session.get(*args, **kwargs)
+        return response
 
     def _get_portal_services_json(self, suffix: str):
-        self._ensure_logged_in()
-        r = self._session.get(f'https://my.ekz.ch/api/portal-services/{suffix}', headers=JSON_HEADERS)
+        r = self.get(f'https://my.ekz.ch/api/portal-services/{suffix}', headers=JSON_HEADERS)
         r.raise_for_status()
         return r.json()
 
