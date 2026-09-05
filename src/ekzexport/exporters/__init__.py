@@ -1,3 +1,3 @@
-from . import influxdb, csv
+from . import influxdb, csv, mariadb
 
-ALL_EXPORT_COMMANDS = [influxdb.cli, csv.cli]
+ALL_EXPORT_COMMANDS = [influxdb.cli, csv.cli, mariadb.cli]
