@@ -170,7 +170,7 @@ class DataSelection:
     _data_type: Optional[str]
     _date_from: Optional[str]
     _date_to: Optional[str]
-    limit: int
+    limit: Optional[int]  # None means unlimited
 
     def __init__(self, session: Session, installation_id: str, data_type: Optional[str],
                  date_from: Optional[str], date_to: Optional[str], limit: int):
@@ -179,7 +179,7 @@ class DataSelection:
         self._data_type = data_type
         self._date_from = date_from
         self._date_to = date_to
-        self.limit = limit
+        self.limit = limit if limit and limit > 0 else None  # 0/negative means unlimited
 
     @cached_property
     def _properties(self) -> List[IDProperty]:

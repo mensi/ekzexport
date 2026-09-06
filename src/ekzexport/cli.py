@@ -111,7 +111,7 @@ def installation_properties(session: Session, installation: Installation):
               help='Date from which to start fetching data. Defaults to 7 days before to.')
 @click.option('--to', 'date_to', default=None, metavar='YYYY-MM-DD',
               help='Date until which to fetch data. Defaults to the latest date with data available.')
-@click.option('-l', '--limit', type=int, default=4, help='Maximum number of weeks to download.')
+@click.option('-l', '--limit', type=int, default=4, help='Maximum number of weeks to download. Use 0 for no limit (get the rest).')
 @pass_installation
 @pass_session
 @click.pass_context
