@@ -65,7 +65,7 @@ With the installation ID, we can then figure out what kind of data is available
 for your account:
 
 ```console
-$ ekzexport installation 456 properties
+$ ekzexport installation 820903 properties
                  Properties                 
                  ╷            ╷
   Property       │ From       │ Until      
@@ -100,6 +100,7 @@ But the more interesting use-case is to export data. Available exporters are:
 
  - `csv` to sync data to a CSV file in the same format as myEKZ offers
  - `influxdb` to sync data to an InfluxDB 2.x server
+ - `mariadb` to upsert data into a MariaDB/MySQL table
 
 The CLI's help command will provide further detail on the exporter-specific
 options, for example:

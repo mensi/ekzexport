@@ -42,6 +42,7 @@ ekzexport = "ekzexport.cli:main"
 
 [project.optional-dependencies]
 influx = ["influxdb-client"]
+mariadb = ["pymysql"]
 
 [build-system]
 requires = ["hatchling"]
