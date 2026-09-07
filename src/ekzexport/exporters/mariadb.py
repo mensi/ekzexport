@@ -20,15 +20,18 @@ except ImportError:
 @click.option('-p', '--password', type=str, required=True)
 @click.option('-d', '--database', type=str, required=True)
 @click.option('-t', '--table', type=str, default='ekz_energy')
+@click.option('--init-db', is_flag=True,
+              help="Create --table if it doesn't exist yet, then proceed with the export.")
 @pass_data
 @pass_installation
 @pass_session
 def cli(session: Session, installation: Installation, data: DataSelection,
-        host: str, port: int, user: str, password: str, database: str, table: str):
+        host: str, port: int, user: str, password: str, database: str, table: str, init_db: bool):
     """Export to a MariaDB/MySQL database.
 
-    Upserts rows keyed by timestamp into --table (created automatically if it doesn't exist yet), with
-    one column each for the HT and NT tariff readings.
+    Upserts rows keyed by timestamp into --table, with one column each for the HT and NT tariff
+    readings. Run once with --init-db to create the table; without it, the export fails if the
+    table doesn't exist yet.
 
     Only data after the latest existing row will be exported. If the table is empty, the complete range
     is exported.
@@ -39,9 +42,18 @@ def cli(session: Session, installation: Installation, data: DataSelection,
     conn = pymysql.connect(host=host, port=port, user=user, password=password, database=database, autocommit=False)
     try:
         with conn.cursor() as cursor:
+            if init_db:
+                cursor.execute(
+                    f'CREATE TABLE IF NOT EXISTS `{table}` ('
+                    '`time` DATETIME NOT NULL PRIMARY KEY, `ht` DOUBLE NULL, `nt` DOUBLE NULL)')
+                conn.commit()
             cursor.execute(
-                f'CREATE TABLE IF NOT EXISTS `{table}` ('
-                '`time` DATETIME NOT NULL PRIMARY KEY, `ht` DOUBLE NULL, `nt` DOUBLE NULL)')
+                'SELECT COUNT(*) FROM information_schema.tables '
+                'WHERE table_schema = %s AND table_name = %s', (database, table))
+            exists, = cursor.fetchone()
+            if not exists:
+                raise click.UsageError(
+                    f'Table `{table}` does not exist in database `{database}`. Run again with --init-db to create it.')
             cursor.execute(f'SELECT MAX(`time`) FROM `{table}`')
             latest_time, = cursor.fetchone()
         conn.commit()
