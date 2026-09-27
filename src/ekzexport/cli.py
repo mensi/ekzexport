@@ -221,6 +221,7 @@ def show_leg(session: Session, leg: Leg):
 
     mpoints = Table(title='Participating Metering Points', box=box.MINIMAL_HEAVY_HEAD)
     mpoints.add_column('ID')
+    mpoints.add_column('Status')
     mpoints.add_column('Role')
     mpoints.add_column('Power')
     mpoints.add_column('Location')
@@ -228,6 +229,9 @@ def show_leg(session: Session, leg: Leg):
     mpoints.add_column('Contact Info')
 
     for point in leg['meteringPointList']:
+        status = 'N/A'
+        if point['meteringPointId'] in status_by_point:
+            status = status_by_point[point['meteringPointId']]['participantStatus']
         role = 'Producer' if point['specifications']['producer'] else 'Consumer'
         power = (str(point['specifications']['modulePower']) if point['specifications']['producer'] else
                  str(point['specifications']['connectionPower']))
@@ -240,11 +244,62 @@ def show_leg(session: Session, leg: Leg):
         contact = 'N/A'
         if point['businessPartnerId'] in data_by_gpart:
             contact = data_by_gpart[point['businessPartnerId']]['communicationData']['email'] or 'N/A'
-        mpoints.add_row(point['meteringPointId'], role, power, location, name, contact)
+        mpoints.add_row(point['meteringPointId'], status, role, power, location, name, contact)
 
     console = Console()
     console.print(stats)
     console.print(mpoints)
+
+
+@leg_group.command('accept')
+@click.argument('meteringpoint_id')
+@pass_leg
+@pass_session
+def leg_accept_meteringpoint(session: Session, leg: Leg, meteringpoint_id: str):
+    """Accept a specific meteringpoint."""
+    leg = session.get_leg_detail(leg.id)
+    for mpoint in leg['meteringPointStatusList']:
+        if mpoint['meteringPointId'] != meteringpoint_id:
+            continue
+        if mpoint['participantStatus'] != 'AUSSTEHENDE_GENEHMIGUNG':
+            raise click.ClickException('Metering point is not in state "AUSSTEHENDE_GENEHMIGUNG".')
+
+        session.accept_leg_meteringpoint(leg['legId'], meteringpoint_id, mpoint['businessPartnerId'])
+        click.echo('Metering point accepted!')
+        return
+    raise click.ClickException('Metering point not found.')
+
+
+@leg_group.group('invites')
+def leg_invites_group():
+    """Manage LEG invites."""
+    pass
+
+
+@leg_invites_group.command('show')
+@pass_leg
+@pass_session
+def show_leg_invites(session: Session, leg: Leg):
+    """List invites for the LEG."""
+    leg = session.get_leg_detail(leg.id)
+
+    invites = Table(title=f'LEG {leg['basisInfo']['description']} Invites', box=box.MINIMAL_HEAVY_HEAD)
+    invites.add_column('E-Mail')
+    invites.add_column('Created')
+    invites.add_column('Status')
+
+    for invite in leg.get('invitations', []):
+        status = 'Unknown'
+        if invite.get('redeemedAt') is not None:
+            status = 'Redeemed'
+        elif invite.get('revokedAt') is not None:
+            status = 'Revoked'
+        elif invite.get('declinedAt') is not None:
+            status = 'Declined'
+        invites.add_row(invite['email'], invite['createdAt'], status)
+
+    console = Console()
+    console.print(invites)
 
 
 def main():

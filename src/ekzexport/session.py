@@ -146,6 +146,19 @@ class Session:
     def get_csrf_token(self):
         return self._get_portal_services_json('csrf/v1/token')['token']
 
+    def _post_portal_services_json(self, suffix: str, data: dict):
+        csrf = self.get_csrf_token()
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrf}
+        r = self._session.post(f'https://my.ekz.ch/api/portal-services/{suffix}',
+                               headers=headers, json=data)
+        r.raise_for_status()
+        if r.content:
+            return r.json()
+        return None
+
     @cached_property
     def installation_selection_data(self) -> InstallationSelectionData:
         return self._get_portal_services_json(
@@ -169,3 +182,11 @@ class Session:
 
     def get_leg_detail(self, leg_id: str) -> LegDetails:
         return self._get_portal_services_json(f'leg-manager-dashboard/v1/leg-details/{leg_id}')['legDetails']
+
+    def accept_leg_meteringpoint(self, leg_id, meteringpoint_id, businesspartner_id):
+        self._post_portal_services_json('leg-manager-dashboard/v1/leg-accept-meteringpoint', {
+            'legId': leg_id,
+            'businessPartnerId': businesspartner_id,
+            'meteringPointId': meteringpoint_id,
+        })
+
