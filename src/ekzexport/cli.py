@@ -302,6 +302,19 @@ def show_leg_invites(session: Session, leg: Leg):
     console.print(invites)
 
 
+@leg_invites_group.command('send')
+@click.argument('emails', nargs=-1)
+@click.option('--body', required=True, help='Message body for the invitation email')
+@click.option('--subject', required=True, help='Subject for the invitation email')
+@pass_leg
+@pass_session
+def send_leg_invites(session: Session, leg: Leg, subject: str, body: str, emails: tuple[str]):
+    """Send invites for the LEG."""
+    leg = session.get_leg_detail(leg.id)
+    session.send_leg_invites(leg['legId'], emails, subject, body)
+    click.echo('Invitations sent')
+
+
 def main():
     try:
         cli()

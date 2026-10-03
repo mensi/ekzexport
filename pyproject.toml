@@ -1,6 +1,6 @@
 [project]
 name = "ekzexport"
-version = "0.3.1"
+version = "0.3.2"
 description = "CLI and data exporter for the myEKZ customer portal."
 readme = "README.md"
 license = "Apache-2.0"

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from functools import cached_property
+from typing import Sequence
 
 import requests
 import pyotp
@@ -8,6 +9,7 @@ from bs4 import BeautifulSoup
 
 from .apitypes import *
 
+DEFAULT_BASE_URL = 'https://my.ekz.ch'
 HTML_HEADERS = {
     'Accept': 'text/html,application/xhtml+xml,application/xml'
 }
@@ -18,7 +20,8 @@ JSON_HEADERS = {
 
 class Session:
     """Represents a session with the EKZ API."""
-    def __init__(self, username: str, password: str, token='', login_immediately=False):
+    def __init__(self, username: str, password: str, token='', login_immediately=False, base_url=DEFAULT_BASE_URL):
+        self._base_url = base_url
         self._session = requests.Session()
         self._session.headers.update({'User-Agent': 'ekzexport'})
         self._username = username
@@ -36,7 +39,7 @@ class Session:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._logged_in:
-            r = self._session.post('https://my.ekz.ch/logout', headers=HTML_HEADERS,
+            r = self._session.post(f'{self._base_url}/logout', headers=HTML_HEADERS,
                                    data={'_csrf': self.get_csrf_token()})
             r.raise_for_status()
 
@@ -53,7 +56,7 @@ class Session:
         # /startseite appears to be really slow for some accounts, so that is not a good choice.
         # /verbrauch used to be what we used but for pure LEG managers without a metering point that returns 403
         # so /nutzerdaten it is, even if we don't actually care about the user data.
-        r = self._session.get('https://my.ekz.ch/nutzerdaten/', headers=HTML_HEADERS)
+        r = self._session.get(f'{self._base_url}/nutzerdaten/', headers=HTML_HEADERS)
         r.raise_for_status()
 
         # Find the login form and get the action URL, so we can submit credentials.
@@ -113,21 +116,21 @@ class Session:
                 raise Exception('myEKZ auth expects something we can\'t handle.')
 
         # Finally, if we're successfully logged in, we should be back at the original URL we requested
-        if r.url != 'https://my.ekz.ch/nutzerdaten/':
-            raise Exception('Unable to login. Ended up at ' + r.url + ' instead of https://my.ekz.ch/nutzerdaten/')
+        if r.url != f'{self._base_url}/nutzerdaten/':
+            raise Exception(f'Unable to login. Ended up at {r.url} instead of {self._base_url}/nutzerdaten/')
         
         self._logged_in = True
         self._last_successful_login = datetime.now()
 
-    def get(self, *args, **kwargs) -> requests.Response:
-        """Call self._session.get while handling redirects to the login flow.
+    def _call_with_autologin(self, func, *args, **kwargs) -> requests.Response:
+        """Call func while handling redirects to the login flow.
 
         Using this function makes the request more robust regarding session timeouts, as it
         transparently logs in again when encountering a redirect to the login form or an error."""
-        response = self._session.get(*args, **kwargs)
+        response = func(*args, **kwargs)
         if response.status_code == 302 and 'login' in response.headers.get('Location', ''):
             self._perform_login()
-            return self._session.get(*args, **kwargs)
+            return func(*args, **kwargs)
         elif response.status_code == 500:
             # It looks like API methods just return a 500 with an invalid login state in the session,
             # so make sure we're logged in. We however do not want to blindly log in and retry if we do
@@ -135,11 +138,17 @@ class Session:
             # to hammer the API in that case.
             if self._last_successful_login < datetime.now() - timedelta(minutes=10):
                 self._perform_login()
-                return self._session.get(*args, **kwargs)
+                return func(*args, **kwargs)
         return response
 
+    def get(self, *args, **kwargs) -> requests.Response:
+        return self._call_with_autologin(self._session.get, *args, **kwargs)
+
+    def post(self, *args, **kwargs) -> requests.Response:
+        return self._call_with_autologin(self._session.post, *args, **kwargs)
+
     def _get_portal_services_json(self, suffix: str):
-        r = self.get(f'https://my.ekz.ch/api/portal-services/{suffix}', headers=JSON_HEADERS)
+        r = self.get(f'{self._base_url}/api/portal-services/{suffix}', headers=JSON_HEADERS)
         r.raise_for_status()
         return r.json()
 
@@ -152,8 +161,8 @@ class Session:
             'Accept': 'application/json, text/plain, */*',
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': csrf}
-        r = self._session.post(f'https://my.ekz.ch/api/portal-services/{suffix}',
-                               headers=headers, json=data)
+        r = self.post(f'{self._base_url}/api/portal-services/{suffix}',
+                      headers=headers, json=data)
         r.raise_for_status()
         if r.content:
             return r.json()
@@ -190,3 +199,11 @@ class Session:
             'meteringPointId': meteringpoint_id,
         })
 
+    def send_leg_invites(self, leg_id: str, emails: Sequence[str], subject: str, body: str):
+        emails = '; '.join(e.strip() for e in emails)
+        self._post_portal_services_json('leg-manager-dashboard/v1/invitation/submit', {
+            'legId': leg_id,
+            'emailAddresses': emails,
+            'subject': subject,
+            'body': body,
+        })
