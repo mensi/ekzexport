@@ -122,23 +122,37 @@ class Session:
         self._logged_in = True
         self._last_successful_login = datetime.now()
 
+    @staticmethod
+    def _is_login_redirect(response: requests.Response) -> bool:
+        return response.is_redirect and 'login' in response.headers.get('Location', '')
+
     def _call_with_autologin(self, func, *args, **kwargs) -> requests.Response:
         """Call func while handling redirects to the login flow.
 
         Using this function makes the request more robust regarding session timeouts, as it
         transparently logs in again when encountering a redirect to the login form or an error."""
+        # Without a valid session, myEKZ answers API calls with a redirect to the login form. We must
+        # see that redirect ourselves: when requests follows it, we end up with the HTML of the login
+        # form and a 200, which is indistinguishable from a successful call until parsing it fails.
+        kwargs.setdefault('allow_redirects', False)
         response = func(*args, **kwargs)
-        if response.status_code == 302 and 'login' in response.headers.get('Location', ''):
+        if self._is_login_redirect(response):
             self._perform_login()
-            return func(*args, **kwargs)
+            response = func(*args, **kwargs)
+            if self._is_login_redirect(response):
+                raise Exception(f'myEKZ still asks for a login after logging in, for {response.url}')
         elif response.status_code == 500:
-            # It looks like API methods just return a 500 with an invalid login state in the session,
+            # API methods used to return a 500 with an invalid login state in the session,
             # so make sure we're logged in. We however do not want to blindly log in and retry if we do
             # have a valid, logged-in session, as there could also be genuine 500 errors, and we don't want
             # to hammer the API in that case.
             if self._last_successful_login < datetime.now() - timedelta(minutes=10):
                 self._perform_login()
-                return func(*args, **kwargs)
+                response = func(*args, **kwargs)
+        if response.is_redirect:
+            # Any other redirect is not something an API call should ever get; do not hand it to
+            # callers as if it were a response.
+            raise Exception(f'Unexpected redirect from {response.url} to {response.headers.get("Location")}')
         return response
 
     def get(self, *args, **kwargs) -> requests.Response:
@@ -150,7 +164,15 @@ class Session:
     def _get_portal_services_json(self, suffix: str):
         r = self.get(f'{self._base_url}/api/portal-services/{suffix}', headers=JSON_HEADERS)
         r.raise_for_status()
-        return r.json()
+        return self._json(r)
+
+    @staticmethod
+    def _json(r: requests.Response):
+        try:
+            return r.json()
+        except ValueError:
+            raise Exception(f'Expected JSON from {r.url} but got {r.headers.get("Content-Type")!r} '
+                            f'(status {r.status_code}). Not logged in, or myEKZ changed?') from None
 
     def get_csrf_token(self):
         return self._get_portal_services_json('csrf/v1/token')['token']
@@ -165,7 +187,7 @@ class Session:
                       headers=headers, json=data)
         r.raise_for_status()
         if r.content:
-            return r.json()
+            return self._json(r)
         return None
 
     @cached_property
